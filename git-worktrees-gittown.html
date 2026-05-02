@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Worktrees & Git Town — Developer Workflow Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Berkeley+Mono:ital,wght@0,100..700;1,100..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080808;
+    --surface: #0e0e0e;
+    --surface2: #141414;
+    --border: #222222;
+    --border2: #2e2e2e;
+    --text: #f5f0e8;
+    --text-dim: #8a8070;
+    --text-muted: #4a4540;
+    --accent-green: #ff6a00;
+    --accent-blue: #ff2d78;
+    --accent-purple: #ffe600;
+    --accent-amber: #00e5ff;
+    --accent-red: #ff2d78;
+    --accent-cyan: #ff6a00;
+    --glow-green: rgba(255, 106, 0, 0.18);
+    --glow-blue: rgba(255, 45, 120, 0.18);
+    --glow-purple: rgba(255, 230, 0, 0.18);
+    --font-mono: 'Berkeley Mono', 'Courier New', monospace;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding: 60px 24px;
+  }
+
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,106,0,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,45,120,0.07) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 100%);
+  }
+
+  .hero-glow {
+    position: absolute;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,106,0,0.18) 0%, rgba(255,45,120,0.10) 40%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: breathe 6s ease-in-out infinite;
+  }
+
+  .hero-glow2 {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,230,0,0.10) 0%, transparent 70%);
+    top: 30%;
+    left: 65%;
+    transform: translate(-50%, -50%);
+    animation: breathe 8s 2s ease-in-out infinite;
+  }
+
+  .hero-glow3 {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,45,120,0.12) 0%, transparent 70%);
+    top: 70%;
+    left: 30%;
+    transform: translate(-50%, -50%);
+    animation: breathe 7s 1s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+    50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  }
+
+  .hero-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent-green);
+    margin-bottom: 24px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .hero-eyebrow::before, .hero-eyebrow::after {
+    content: '';
+    width: 40px;
+    height: 1px;
+    background: var(--accent-green);
+    opacity: 0.5;
+  }
+
+  .hero-title {
+    font-family: var(--font-serif);
+    font-size: clamp(48px, 8vw, 96px);
+    font-weight: 400;
+    line-height: 1.05;
+    text-align: center;
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .hero-title .line1 { display: block; color: var(--text); }
+  .hero-title .line2 {
+    display: block;
+    font-style: italic;
+    background: linear-gradient(135deg, #ff6a00 0%, #ff2d78 50%, #ffe600 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    margin-top: 28px;
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    max-width: 500px;
+    line-height: 1.8;
+    position: relative;
+  }
+
+  .hero-nav {
+    display: flex;
+    gap: 12px;
+    margin-top: 48px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+  }
+
+  .nav-pill {
+    padding: 10px 22px;
+    border: 1px solid var(--border2);
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .nav-pill::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .nav-pill:nth-child(1)::before { background: var(--glow-green); }
+  .nav-pill:nth-child(2)::before { background: var(--glow-blue); }
+  .nav-pill:nth-child(3)::before { background: var(--glow-purple); }
+
+  .nav-pill:hover::before { opacity: 1; }
+  .nav-pill:hover { border-color: var(--border2); color: var(--text); }
+  .nav-pill:nth-child(1):hover { border-color: var(--accent-green); color: var(--accent-green); }
+  .nav-pill:nth-child(2):hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .nav-pill:nth-child(3):hover { border-color: var(--accent-purple); color: var(--accent-purple); }
+
+  /* ── SCROLL INDICATOR ── */
+  .scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: fadeInUp 1s 1.5s both;
+  }
+
+  .scroll-line {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, transparent, #ff6a00);
+    animation: scrollPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes scrollPulse {
+    0%, 100% { opacity: 0.3; transform: scaleY(0.8); }
+    50% { opacity: 1; transform: scaleY(1); }
+  }
+
+  /* ── SECTIONS ── */
+  .section {
+    padding: 100px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 64px;
+  }
+
+  .section-number {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    margin-top: 8px;
+    white-space: nowrap;
+    opacity: 0.6;
+  }
+
+  .section-title-block { flex: 1; }
+
+  .section-tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin-bottom: 16px;
+  }
+
+  .tag-green { background: rgba(255,106,0,0.12); color: #ff6a00; border: 1px solid rgba(255,106,0,0.3); }
+  .tag-blue { background: rgba(255,45,120,0.12); color: #ff2d78; border: 1px solid rgba(255,45,120,0.3); }
+  .tag-purple { background: rgba(255,230,0,0.12); color: #ffe600; border: 1px solid rgba(255,230,0,0.3); }
+
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--text);
+  }
+
+  .section-title em {
+    font-style: italic;
+    color: var(--accent-green);
+  }
+
+  .section-title.blue em { color: var(--accent-blue); }
+  .section-title.purple em { color: var(--accent-purple); }
+
+  .section-desc {
+    margin-top: 16px;
+    color: var(--text-dim);
+    font-size: 13px;
+    max-width: 600px;
+    line-height: 1.9;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border2) 20%, var(--border2) 80%, transparent);
+    margin: 0 24px;
+  }
+
+  /* ── TERMINAL ── */
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    position: relative;
+  }
+
+  .terminal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255,106,0,0.2), transparent 50%, rgba(255,45,120,0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+  }
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #28ca41; }
+
+  .terminal-title {
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .terminal-body {
+    padding: 24px;
+    min-height: 200px;
+  }
+
+  .term-line {
+    display: block;
+    margin-bottom: 6px;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .term-line.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .term-prompt { color: var(--accent-green); }
+  .term-cmd { color: var(--text); }
+  .term-arg { color: var(--accent-blue); }
+  .term-flag { color: var(--accent-amber); }
+  .term-output { color: var(--text-dim); padding-left: 20px; }
+  .term-comment { color: var(--text-muted); font-style: italic; }
+  .term-success { color: var(--accent-green); }
+  .term-path { color: var(--accent-cyan); }
+  .term-branch { color: var(--accent-purple); }
+
+  .term-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: var(--accent-green);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+    margin-left: 2px;
+  }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* ── TWO-COL LAYOUT ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  @media (max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* ── WORKTREE DIAGRAM ── */
+  .diagram-container {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .diagram-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+
+  .worktree-diagram {
+    position: relative;
+    height: 300px;
+  }
+
+  .repo-node {
+    position: absolute;
+    left: 50%;
+    top: 20px;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 2px solid var(--accent-green);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--accent-green);
+    box-shadow: 0 0 20px rgba(255,106,0,0.25);
+    z-index: 10;
+    animation: nodeGlow 3s ease-in-out infinite;
+  }
+
+  @keyframes nodeGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,106,0,0.3); }
+    50% { box-shadow: 0 0 40px rgba(255,106,0,0.6); }
+  }
+
+  .repo-node .node-icon { margin-right: 8px; font-size: 14px; }
+
+  .wt-branch {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .wt-branch:nth-child(2) { left: 8%; top: 130px; }
+  .wt-branch:nth-child(3) { left: 37%; top: 155px; }
+  .wt-branch:nth-child(4) { right: 8%; top: 130px; }
+
+  .wt-line {
+    width: 1px;
+    height: 0;
+    background: linear-gradient(to bottom, var(--accent-green), var(--accent-blue));
+    opacity: 0.5;
+    transition: height 1s ease;
+    margin-bottom: 8px;
+  }
+
+  .wt-line.animated { height: 60px; }
+
+  .wt-node {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    white-space: nowrap;
+    text-align: center;
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  .wt-node.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .wt-node .wt-name { display: block; margin-bottom: 4px; }
+  .wt-node .wt-path { font-size: 10px; color: var(--text-muted); }
+
+  .wt-branch:nth-child(2) .wt-node { border-color: rgba(255,106,0,0.35); color: var(--accent-green); }
+  .wt-branch:nth-child(3) .wt-node { border-color: rgba(255,45,120,0.35); color: var(--accent-blue); }
+  .wt-branch:nth-child(4) .wt-node { border-color: rgba(255,230,0,0.35); color: var(--accent-amber); }
+
+  /* ── GIT TREE CANVAS ── */
+  .git-canvas-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 24px;
+    overflow: hidden;
+  }
+
+  .git-canvas-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  canvas.git-tree {
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  /* ── COMMAND CARDS ── */
+  .cmd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 40px;
+  }
+
+  .cmd-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: all 0.25s ease;
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cmd-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .cmd-card.green::after { background: linear-gradient(90deg, var(--accent-green), transparent); }
+  .cmd-card.blue::after { background: linear-gradient(90deg, var(--accent-blue), transparent); }
+  .cmd-card.purple::after { background: linear-gradient(90deg, var(--accent-purple), transparent); }
+  .cmd-card.amber::after { background: linear-gradient(90deg, var(--accent-amber), transparent); }
+
+  .cmd-card:hover {
+    border-color: var(--border2);
+    transform: translateY(-2px);
+  }
+
+  .cmd-card:hover::after { opacity: 1; }
+
+  .cmd-name {
+    font-size: 13px;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+
+  .cmd-card.green .cmd-name { color: var(--accent-green); }
+  .cmd-card.blue .cmd-name { color: var(--accent-blue); }
+  .cmd-card.purple .cmd-name { color: var(--accent-purple); }
+  .cmd-card.amber .cmd-name { color: var(--accent-amber); }
+
+  .cmd-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 40px;
+  }
+
+  .compare-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .compare-col-head {
+    padding: 16px 24px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .compare-col-head:first-child {
+    color: var(--text-dim);
+    border-right: 1px solid var(--border);
+  }
+
+  .compare-col-head:last-child { color: var(--accent-blue); }
+
+  .compare-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .compare-row:last-child { border-bottom: none; }
+  .compare-row:hover { background: rgba(255,255,255,0.02); }
+
+  .compare-cell {
+    padding: 16px 24px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .compare-cell:first-child {
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  .compare-cell:last-child { color: var(--accent-blue); }
+
+  /* ── BRANCH FLOW ANIMATION ── */
+  .branch-flow {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 32px;
+    margin-top: 40px;
+  }
+
+  .flow-title {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+  }
+
+  .flow-track {
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+  }
+
+  .flow-lane {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .flow-lane-main { top: 30px; }
+  .flow-lane-feat { top: 90px; }
+  .flow-lane-hotfix { top: 150px; }
+
+  .flow-lane-label {
+    position: absolute;
+    right: 0;
+    top: -10px;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+  }
+
+  .flow-commit {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+    background: var(--bg);
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 5;
+  }
+
+  .flow-commit:hover { transform: translate(-50%, -50%) scale(1.4); }
+  .flow-commit.main { top: 30px; border-color: var(--accent-green); }
+  .flow-commit.feat { top: 90px; border-color: var(--accent-blue); }
+  .flow-commit.hotfix { top: 150px; border-color: var(--accent-amber); }
+
+  .flow-commit-label {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+
+  .flow-commit-wrap:hover .flow-commit-label { opacity: 1; }
+  .flow-commit-wrap { position: absolute; }
+
+  /* ── COMBINED SECTION ── */
+  .combined-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 40px;
+  }
+
+  @media (max-width: 768px) {
+    .combined-grid { grid-template-columns: 1fr; }
+    .section-header { flex-direction: column; }
+  }
+
+  .combined-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 28px;
+  }
+
+  .combined-card-title {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    margin-bottom: 12px;
+    font-weight: 400;
+  }
+
+  .combined-card:nth-child(1) .combined-card-title { color: var(--accent-green); }
+  .combined-card:nth-child(2) .combined-card-title { color: var(--accent-blue); }
+
+  .combined-card-body {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .combined-card-body ul {
+    margin-top: 12px;
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .combined-card-body li {
+    padding: 6px 0;
+    padding-left: 18px;
+    position: relative;
+  }
+
+  .combined-card-body li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  /* ── WORKFLOW SHOWCASE ── */
+  .workflow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 40px;
+  }
+
+  .wf-step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 20px;
+    position: relative;
+    padding-bottom: 32px;
+  }
+
+  .wf-step:last-child { padding-bottom: 0; }
+
+  .wf-step-num-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .wf-step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    background: var(--bg);
+  }
+
+  .wf-step-line {
+    width: 1px;
+    flex: 1;
+    margin-top: 8px;
+    background: var(--border);
+  }
+
+  .wf-step:nth-child(1) .wf-step-num { border-color: var(--accent-green); color: var(--accent-green); }
+  .wf-step:nth-child(2) .wf-step-num { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .wf-step:nth-child(3) .wf-step-num { border-color: var(--accent-purple); color: var(--accent-purple); }
+  .wf-step:nth-child(4) .wf-step-num { border-color: var(--accent-amber); color: var(--accent-amber); }
+  .wf-step:nth-child(5) .wf-step-num { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+  .wf-step-content {
+    padding-top: 6px;
+  }
+
+  .wf-step-title {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .wf-step-body {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  .inline-cmd {
+    display: inline;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+    color: var(--accent-green);
+    white-space: nowrap;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── INTERACTIVE TABS ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 24px;
+    width: fit-content;
+  }
+
+  .tab-btn {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    transition: all 0.2s;
+    letter-spacing: 0.03em;
+  }
+
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── HIGHLIGHT BOX ── */
+  .highlight-box {
+    background: rgba(255,106,0,0.06);
+    border: 1px solid rgba(255,106,0,0.2);
+    border-left: 3px solid #ff6a00;
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 24px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .highlight-box.blue {
+    background: rgba(255,45,120,0.06);
+    border-color: rgba(255,45,120,0.2);
+    border-left-color: #ff2d78;
+  }
+
+  .highlight-box.purple {
+    background: rgba(255,230,0,0.06);
+    border-color: rgba(255,230,0,0.2);
+    border-left-color: #ffe600;
+  }
+
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 48px;
+  }
+
+  .stat-item {
+    background: var(--surface);
+    padding: 28px 24px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--font-serif);
+    font-size: 36px;
+    font-weight: 400;
+    margin-bottom: 6px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .stat-item:nth-child(1) .stat-value { color: var(--accent-green); }
+  .stat-item:nth-child(2) .stat-value { color: var(--accent-blue); }
+  .stat-item:nth-child(3) .stat-value { color: var(--accent-purple); }
+
+  /* ── LIVE DEMO PANEL ── */
+  #live-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #050505;
+    border-top: 2px solid #ff6a00;
+    z-index: 9000;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    height: 320px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -20px 60px rgba(255, 106, 0, 0.15);
+  }
+
+  #live-panel.open { transform: translateY(0); }
+
+  #live-panel-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  #live-panel-bar .lp-title {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #ff6a00;
+    flex: 1;
+  }
+
+  #live-panel-bar .lp-step-label {
+    font-size: 11px;
+    color: #8a8070;
+    font-style: italic;
+  }
+
+  #live-panel-status {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #333;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  #live-panel-status.running { background: #ff6a00; animation: statusPulse 0.8s ease-in-out infinite; }
+  #live-panel-status.ok { background: #44ff88; }
+  #live-panel-status.err { background: #ff2d78; }
+
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  #live-panel-close {
+    background: none;
+    border: none;
+    color: #4a4540;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  #live-panel-close:hover { color: #f5f0e8; }
+
+  #live-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: var(--font-mono);
+    color: #c8c0b0;
+  }
+
+  #live-output::-webkit-scrollbar { width: 4px; }
+  #live-output::-webkit-scrollbar-track { background: transparent; }
+  #live-output::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .lo-stdout { color: #c8c0b0; white-space: pre-wrap; }
+  .lo-stderr { color: #ff9944; white-space: pre-wrap; }
+  .lo-meta   { color: #4a4540; font-style: italic; }
+  .lo-ok     { color: #44ff88; }
+  .lo-err    { color: #ff2d78; }
+
+  /* ── RUN BUTTON ── */
+  .run-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 16px;
+    background: rgba(255, 106, 0, 0.1);
+    border: 1px solid rgba(255, 106, 0, 0.35);
+    border-radius: 6px;
+    color: #ff6a00;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .run-btn:hover {
+    background: rgba(255, 106, 0, 0.2);
+    border-color: #ff6a00;
+    box-shadow: 0 0 12px rgba(255, 106, 0, 0.2);
+  }
+
+  .run-btn:active { transform: scale(0.97); }
+
+  .run-btn svg { flex-shrink: 0; }
+
+  .run-btn.running {
+    color: #ff9944;
+    border-color: rgba(255, 153, 68, 0.4);
+    background: rgba(255, 153, 68, 0.08);
+    cursor: wait;
+  }
+
+  .run-btn.done-ok {
+    color: #44ff88;
+    border-color: rgba(68, 255, 136, 0.3);
+    background: rgba(68, 255, 136, 0.06);
+  }
+
+  .run-btn.done-err {
+    color: #ff2d78;
+    border-color: rgba(255, 45, 120, 0.3);
+    background: rgba(255, 45, 120, 0.06);
+  }
+
+  /* Run button toolbar that sits above terminal body */
+  .terminal-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 16px 0;
+    flex-wrap: wrap;
+  }
+
+  /* Server status badge in nav */
+  #server-badge {
+    position: fixed;
+    top: 16px; right: 16px;
+    z-index: 9100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #0a0a0a;
+    border: 1px solid #222;
+    border-radius: 100px;
+    font-size: 11px;
+    color: #4a4540;
+    letter-spacing: 0.08em;
+    transition: all 0.3s;
+  }
+
+  #server-badge.connected {
+    border-color: rgba(68, 255, 136, 0.3);
+    color: #44ff88;
+  }
+
+  #server-badge.disconnected {
+    border-color: rgba(255, 45, 120, 0.3);
+    color: #ff2d78;
+  }
+
+  #server-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  #server-badge.connected #server-dot { animation: statusPulse 2s ease-in-out infinite; }
+
+  /* Section step headers */
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .step-badge {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 100px;
+    background: rgba(255,106,0,0.08);
+    border: 1px solid rgba(255,106,0,0.2);
+    color: #ff6a00;
+    white-space: nowrap;
+  }
+
+  .step-title {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<!-- ── SERVER STATUS BADGE ── -->
+<div id="server-badge" class="disconnected">
+  <span id="server-dot"></span>
+  <span id="server-label">server offline</span>
+</div>
+
+<!-- ── LIVE OUTPUT PANEL ── -->
+<div id="live-panel">
+  <div id="live-panel-bar" onclick="togglePanel()">
+    <span id="live-panel-status"></span>
+    <span class="lp-title">▸ Live Terminal</span>
+    <span class="lp-step-label" id="lp-step-label">—</span>
+    <button id="live-panel-close" onclick="event.stopPropagation(); closePanel()">✕</button>
+  </div>
+  <div id="live-output"><span class="lo-meta">Run a step above to see live output here...</span></div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════╗ -->
+<!-- ║                  HERO                    ║ -->
+<!-- ╚═══════════════════════════════════════════╝ -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-glow2"></div>
+  <div class="hero-glow3"></div>
+
+  <div class="hero-eyebrow">
+    <span></span>
+    Git Workflow Mastery
+    <span></span>
+  </div>
+
+  <h1 class="hero-title">
+    <span class="line1">Worktrees &amp;</span>
+    <span class="line2">Git Town</span>
+  </h1>
+
+  <p class="hero-subtitle">
+    Two powerful tools that transform how teams collaborate with Git.<br>
+    Work in parallel. Ship faster. Never lose context.
+  </p>
+
+  <nav class="hero-nav">
+    <a href="#worktrees" class="nav-pill">01 — Worktrees</a>
+    <a href="#gittown" class="nav-pill">02 — Git Town</a>
+    <a href="#combined" class="nav-pill">03 — Together</a>
+  </nav>
+
+  <div class="scroll-hint">
+    <span>scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- ╔═══════════════════════════════════════════╗ -->
+<!-- ║            WORKTREES SECTION             ║ -->
+<!-- ╚═══════════════════════════════════════════╝ -->
+<div class="divider"></div>
+
+<section class="section" id="worktrees">
+  <div class="section-header fade-in">
+    <div class="section-number">01 / 03</div>
+    <div class="section-title-block">
+      <span class="section-tag tag-green">git worktree</span>
+      <h2 class="section-title">Multiple working directories,<br><em>one repository</em></h2>
+      <p class="section-desc">
+        Git Worktrees let you check out multiple branches simultaneously into separate directories — all sharing the same <code>.git</code> store. No more stashing, no more switching, no context loss.
+      </p>
+    </div>
+  </div>
+
+  <div class="two-col fade-in">
+    <!-- Worktree Diagram -->
+    <div class="diagram-container">
+      <div class="diagram-label">Architecture — Shared .git Object Store</div>
+      <div class="worktree-diagram" id="wtDiagram">
+        <div class="repo-node">
+          <span class="node-icon">⬡</span>
+          .git / object store
+        </div>
+        <!-- Branch nodes injected via JS -->
+      </div>
+    </div>
+
+    <!-- Explanation -->
+    <div>
+      <div class="highlight-box">
+        <strong style="color: var(--accent-green)">The Problem:</strong> Normally, switching branches means dropping everything you're doing. Stash your changes, checkout, do work, switch back, pop stash. It's friction that kills flow.
+      </div>
+      <div class="highlight-box">
+        <strong style="color: var(--accent-green)">The Solution:</strong> Worktrees give each branch its own directory. Your <code>main</code> lives at <code>./project</code>, your feature at <code>../project-feature</code>, your hotfix at <code>../project-hotfix</code> — all live, all active.
+      </div>
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-value">1</div>
+          <div class="stat-label">Git Store</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">∞</div>
+          <div class="stat-label">Worktrees</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">0</div>
+          <div class="stat-label">Stashes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Interactive Steps -->
+  <div style="margin-top: 48px;" class="fade-in">
+
+    <!-- Step 1 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 1</span>
+        <span class="step-title">See the initial repo — one worktree (main)</span>
+        <button class="run-btn" onclick="runStep('wt-list-before', this, 'git worktree list')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git worktree list</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git worktree list</span></span><span class="term-line visible"><span class="term-output">— only main, no extra worktrees yet —</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 2</span>
+        <span class="step-title">Add a feature worktree (new dir, new branch)</span>
+        <button class="run-btn" onclick="runStep('wt-add-feature', this, 'git worktree add ../project-feature -b feature/user-auth')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git worktree add ../project-feature -b feature/user-auth</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git worktree add </span><span class="term-path">../project-feature</span><span class="term-branch"> -b feature/user-auth</span></span><span class="term-line visible"><span class="term-output">Preparing worktree (new branch 'feature/user-auth')</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 3</span>
+        <span class="step-title">Add a hotfix worktree — simulating a prod incident</span>
+        <button class="run-btn" onclick="runStep('wt-add-hotfix', this, 'git worktree add ../project-hotfix -b hotfix/critical-bug')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git worktree add ../project-hotfix -b hotfix/critical-bug</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git worktree add </span><span class="term-path">../project-hotfix</span><span class="term-branch"> -b hotfix/critical-bug</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 4</span>
+        <span class="step-title">List all 3 worktrees — all active simultaneously</span>
+        <button class="run-btn" onclick="runStep('wt-list-after', this, 'git worktree list')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git worktree list</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git worktree list</span></span><span class="term-line visible"><span class="term-output">— all 3 worktrees side by side —</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 5</span>
+        <span class="step-title">Commit the hotfix — in the hotfix worktree</span>
+        <button class="run-btn" onclick="runStep('wt-commit-hotfix', this, 'git commit -m \"fix: login crash\" (in hotfix worktree)')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">cwd: ../project-hotfix — git commit</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-comment"># Working in the hotfix dir — feature dir is untouched</span></span><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git commit </span><span class="term-flag">-m </span><span class="term-arg">"fix: login crash on null session"</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 6</span>
+        <span class="step-title">Prove feature worktree is completely untouched</span>
+        <button class="run-btn" onclick="runStep('wt-feature-untouched', this, 'git status (in feature worktree)')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">cwd: ../project-feature — git status</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-comment"># Feature branch — zero stash, zero conflict</span></span><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git status</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 7</span>
+        <span class="step-title">Remove the hotfix worktree — branch kept, dir gone</span>
+        <button class="run-btn" onclick="runStep('wt-remove-hotfix', this, 'git worktree remove ../project-hotfix')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git worktree remove ../project-hotfix</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git worktree remove </span><span class="term-path">../project-hotfix</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+    <!-- Step 8 -->
+    <div style="margin-bottom: 20px;">
+      <div class="step-header">
+        <span class="step-badge">Step 8</span>
+        <span class="step-title">See the final git log — diverged history</span>
+        <button class="run-btn" onclick="runStep('wt-log', this, 'git log --all --graph --oneline')">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor"/></svg>
+          Run on my machine
+        </button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-bar"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div><span class="terminal-title">git log --all --graph --oneline --decorate</span></div>
+        <div class="terminal-body"><span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git log </span><span class="term-flag">--all --graph --oneline --decorate</span></span><span class="term-cursor"></span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Command Cards -->
+  <div class="cmd-grid fade-in">
+    <div class="cmd-card green">
+      <div class="cmd-name">git worktree add &lt;path&gt; &lt;branch&gt;</div>
+      <div class="cmd-desc">Create a new worktree at the given path, checking out the specified branch.</div>
+    </div>
+    <div class="cmd-card blue">
+      <div class="cmd-name">git worktree list</div>
+      <div class="cmd-desc">Show all linked worktrees with their paths, HEAD commits, and branch names.</div>
+    </div>
+    <div class="cmd-card purple">
+      <div class="cmd-name">git worktree remove &lt;path&gt;</div>
+      <div class="cmd-desc">Remove a worktree. The branch itself is preserved; only the directory is removed.</div>
+    </div>
+    <div class="cmd-card amber">
+      <div class="cmd-name">git worktree prune</div>
+      <div class="cmd-desc">Remove stale worktree references that no longer have a valid directory on disk.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔═══════════════════════════════════════════╗ -->
+<!-- ║            GIT TOWN SECTION              ║ -->
+<!-- ╚═══════════════════════════════════════════╝ -->
+<div class="divider"></div>
+
+<section class="section" id="gittown">
+  <div class="section-header fade-in">
+    <div class="section-number">02 / 03</div>
+    <div class="section-title-block">
+      <span class="section-tag tag-blue">git town</span>
+      <h2 class="section-title blue">High-level Git workflow,<br><em>one command</em></h2>
+      <p class="section-desc">
+        Git Town automates the tedious multi-step Git workflows that slow every team down. Create, sync, and ship branches with a single command — it handles the choreography so you don't have to.
+      </p>
+    </div>
+  </div>
+
+  <!-- Branch Flow Visualization -->
+  <div class="branch-flow fade-in" id="branchFlowViz">
+    <div class="flow-title">Branch Lifecycle — Git Town Workflow</div>
+    <canvas id="flowCanvas" height="180" style="width:100%; display:block;"></canvas>
+  </div>
+
+  <!-- Tabs for Git Town commands -->
+  <div style="margin-top: 48px;" class="fade-in">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('gt', 'hack')">hack</button>
+      <button class="tab-btn" onclick="switchTab('gt', 'sync')">sync</button>
+      <button class="tab-btn" onclick="switchTab('gt', 'ship')">ship</button>
+      <button class="tab-btn" onclick="switchTab('gt', 'diff')">diff-parent</button>
+    </div>
+
+    <div id="gt-hack" class="tab-content active">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="terminal-title">git town hack</span>
+        </div>
+        <div class="terminal-body">
+          <span class="term-line visible"><span class="term-comment"># Create a feature branch the right way</span></span>
+          <span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git town hack </span><span class="term-branch">feature/payment-gateway</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-comment"># What it does under the hood:</span></span>
+          <span class="term-line visible"><span class="term-output">  1. git fetch origin</span></span>
+          <span class="term-line visible"><span class="term-output">  2. git checkout main</span></span>
+          <span class="term-line visible"><span class="term-output">  3. git rebase origin/main</span></span>
+          <span class="term-line visible"><span class="term-output">  4. git checkout -b feature/payment-gateway</span></span>
+          <span class="term-line visible"><span class="term-output">  5. git push -u origin feature/payment-gateway</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-success">✓ On branch feature/payment-gateway</span></span>
+          <span class="term-line visible"><span class="term-success">✓ Up to date with origin/main</span></span>
+          <span class="term-line visible"><span class="term-success">✓ Tracking remote branch set</span></span>
+          <span class="term-line visible"><span class="term-cursor"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="gt-sync" class="tab-content">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="terminal-title">git town sync</span>
+        </div>
+        <div class="terminal-body">
+          <span class="term-line visible"><span class="term-comment"># Sync current branch with parent (and all ancestors)</span></span>
+          <span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git town sync</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-output">[main] git fetch origin</span></span>
+          <span class="term-line visible"><span class="term-output">[main] git rebase origin/main</span></span>
+          <span class="term-line visible"><span class="term-output">[feature/payment-gateway] git rebase main</span></span>
+          <span class="term-line visible"><span class="term-output">[feature/payment-gateway] git push --force-with-lease</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-success">✓ main is up to date</span></span>
+          <span class="term-line visible"><span class="term-success">✓ feature/payment-gateway rebased onto main</span></span>
+          <span class="term-line visible"><span class="term-success">✓ Remote branch updated</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-comment"># Sync all branches in the repo</span></span>
+          <span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git town sync </span><span class="term-flag">--all</span></span>
+          <span class="term-line visible"><span class="term-cursor"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="gt-ship" class="tab-content">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="terminal-title">git town ship</span>
+        </div>
+        <div class="terminal-body">
+          <span class="term-line visible"><span class="term-comment"># Ship a feature branch — merge and cleanup</span></span>
+          <span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git town ship</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-output">  1. git fetch origin</span></span>
+          <span class="term-line visible"><span class="term-output">  2. git rebase origin/main</span></span>
+          <span class="term-line visible"><span class="term-output">  3. git checkout main</span></span>
+          <span class="term-line visible"><span class="term-output">  4. git merge --squash feature/payment-gateway</span></span>
+          <span class="term-line visible"><span class="term-output">  5. git commit</span></span>
+          <span class="term-line visible"><span class="term-output">  6. git push</span></span>
+          <span class="term-line visible"><span class="term-output">  7. git push origin :feature/payment-gateway</span></span>
+          <span class="term-line visible"><span class="term-output">  8. git branch -d feature/payment-gateway</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-success">✓ feature/payment-gateway shipped to main</span></span>
+          <span class="term-line visible"><span class="term-success">✓ Remote branch deleted</span></span>
+          <span class="term-line visible"><span class="term-success">✓ Local branch deleted</span></span>
+          <span class="term-line visible"><span class="term-cursor"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="gt-diff" class="tab-content">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+          <span class="terminal-title">git town diff-parent</span>
+        </div>
+        <div class="terminal-body">
+          <span class="term-line visible"><span class="term-comment"># Show diff against parent branch (not just origin)</span></span>
+          <span class="term-line visible"><span class="term-prompt">❯ </span><span class="term-cmd">git town diff-parent</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-output">Diffing feature/payment-gateway against main</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-success">diff --git a/src/payments/gateway.ts b/src/payments/gateway.ts</span></span>
+          <span class="term-line visible"><span class="term-output">new file mode 100644</span></span>
+          <span class="term-line visible"><span class="term-output">index 0000000..a4f9c21</span></span>
+          <span class="term-line visible"><span class="term-arg">--- /dev/null</span></span>
+          <span class="term-line visible"><span class="term-success">+++ b/src/payments/gateway.ts</span></span>
+          <span class="term-line visible"><span class="term-success">+export class PaymentGateway {</span></span>
+          <span class="term-line visible"><span class="term-success">+  async charge(amount: number) { ... }</span></span>
+          <span class="term-line visible"><span class="term-success">+}</span></span>
+          <span class="term-line visible"> </span>
+          <span class="term-line visible"><span class="term-comment"># Useful with stacked branches — see only YOUR changes</span></span>
+          <span class="term-line visible"><span class="term-cursor"></span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Table -->
+  <div class="compare-wrap fade-in">
+    <div class="compare-header">
+      <div class="compare-col-head">Raw Git (manual)</div>
+      <div class="compare-col-head">Git Town (one command)</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-cell">git fetch<br>git checkout main<br>git rebase origin/main<br>git checkout -b feature/x<br>git push -u origin feature/x</div>
+      <div class="compare-cell">git town hack feature/x</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-cell">git fetch<br>git checkout main<br>git rebase origin/main<br>git checkout feature/x<br>git rebase main<br>git push --force-with-lease</div>
+      <div class="compare-cell">git town sync</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-cell">git checkout main<br>git merge --squash feature/x<br>git commit<br>git push<br>git push origin :feature/x<br>git branch -d feature/x</div>
+      <div class="compare-cell">git town ship</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-cell">git log main..feature/x<br>git diff $(git merge-base main feature/x) feature/x</div>
+      <div class="compare-cell">git town diff-parent</div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔═══════════════════════════════════════════╗ -->
+<!-- ║           COMBINED SECTION               ║ -->
+<!-- ╚═══════════════════════════════════════════╝ -->
+<div class="divider"></div>
+
+<section class="section" id="combined">
+  <div class="section-header fade-in">
+    <div class="section-number">03 / 03</div>
+    <div class="section-title-block">
+      <span class="section-tag tag-purple">Together</span>
+      <h2 class="section-title purple">Better together,<br><em>unstoppable workflow</em></h2>
+      <p class="section-desc">
+        Worktrees handle the <em>where</em> (parallel directories), Git Town handles the <em>how</em> (automated choreography). Combined, they eliminate every friction point in a modern feature branch workflow.
+      </p>
+    </div>
+  </div>
+
+  <div class="combined-grid fade-in">
+    <div class="combined-card">
+      <div class="combined-card-title">Git Worktrees</div>
+      <div class="combined-card-body">
+        Gives you physical parallelism. Each branch lives in its own directory — your editor, terminal, and tools can all be open simultaneously without collision.
+        <ul>
+          <li>No stash/unstash cycles</li>
+          <li>Multiple IDE windows, one codebase</li>
+          <li>Context switching is just <code>cd</code></li>
+          <li>CI/CD scripts can reference parallel paths</li>
+          <li>Safe for long-running compiles or watchers</li>
+        </ul>
+      </div>
+    </div>
+    <div class="combined-card">
+      <div class="combined-card-title">Git Town</div>
+      <div class="combined-card-body">
+        Gives you workflow automation. The multi-step Git ceremonies for creating, updating, and shipping branches collapse into single commands.
+        <ul>
+          <li>Branch creation always starts from latest main</li>
+          <li>Sync keeps branches rebased — clean history</li>
+          <li>Ship cleans up local and remote automatically</li>
+          <li>Stacked branches are first-class citizens</li>
+          <li>Undo support for most commands</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Combined Workflow -->
+  <div class="workflow-steps fade-in" style="margin-top: 48px;">
+    <div style="font-size:11px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-muted); margin-bottom:28px;">
+      Real-world workflow combining both tools
+    </div>
+
+    <div class="wf-step">
+      <div class="wf-step-num-col">
+        <div class="wf-step-num">1</div>
+        <div class="wf-step-line"></div>
+      </div>
+      <div class="wf-step-content">
+        <div class="wf-step-title">Start a new feature</div>
+        <div class="wf-step-body">
+          <span class="inline-cmd">git town hack feature/auth</span> — creates the branch from latest main, sets up tracking. Git Town handles all the fetch-checkout-rebase-push ceremony.
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-step">
+      <div class="wf-step-num-col">
+        <div class="wf-step-num">2</div>
+        <div class="wf-step-line"></div>
+      </div>
+      <div class="wf-step-content">
+        <div class="wf-step-title">Hotfix interrupts — no problem</div>
+        <div class="wf-step-body">
+          <span class="inline-cmd">git worktree add ../hotfix -b hotfix/bug origin/main</span> — spin up a new directory. Your feature work is untouched, running, compiling in its own space.
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-step">
+      <div class="wf-step-num-col">
+        <div class="wf-step-num">3</div>
+        <div class="wf-step-line"></div>
+      </div>
+      <div class="wf-step-content">
+        <div class="wf-step-title">Fix, ship the hotfix</div>
+        <div class="wf-step-body">
+          From the hotfix worktree: <span class="inline-cmd">git town ship</span> — merges to main, deletes the branch, pushes. Zero cleanup steps. Switch back to feature directory with just <span class="inline-cmd">cd</span>.
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-step">
+      <div class="wf-step-num-col">
+        <div class="wf-step-num">4</div>
+        <div class="wf-step-line"></div>
+      </div>
+      <div class="wf-step-content">
+        <div class="wf-step-title">Keep feature in sync</div>
+        <div class="wf-step-body">
+          The hotfix landed on main. <span class="inline-cmd">git town sync</span> in the feature worktree — rebases the feature branch onto the now-updated main. Clean history, no merge commits.
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-step">
+      <div class="wf-step-num-col">
+        <div class="wf-step-num">5</div>
+      </div>
+      <div class="wf-step-content">
+        <div class="wf-step-title">Ship the feature</div>
+        <div class="wf-step-body">
+          <span class="inline-cmd">git town ship</span> from the feature worktree — squash merge, push to main, delete local and remote branch. <span class="inline-cmd">git worktree remove ../project-feature</span> to clean up the directory.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="highlight-box purple fade-in" style="margin-top: 48px;">
+    <strong style="color: var(--accent-purple)">The takeaway:</strong> Worktrees eliminate the physical cost of branch switching. Git Town eliminates the cognitive cost of Git ceremony. Together, they let engineers stay in flow — working on multiple things simultaneously with a clean, consistent workflow.
+  </div>
+</section>
+
+<div class="footer">
+  <div style="margin-bottom: 8px; color: var(--text-dim);">git worktree · git town</div>
+  Built for the developer who values flow over friction
+</div>
+
+<script>
+// ── INTERSECTION OBSERVER FOR FADE-INS ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// ── TERMINAL LINE ANIMATION ──
+function animateTerminal(termId) {
+  const term = document.getElementById(termId);
+  if (!term) return;
+  const lines = term.querySelectorAll('.term-line');
+  lines.forEach((line, i) => {
+    setTimeout(() => line.classList.add('visible'), i * 80);
+  });
+}
+
+// Trigger terminal animation on scroll
+const termObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const termBody = entry.target.querySelector('#term-wt-add');
+      if (termBody) animateTerminal('term-wt-add');
+      termObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.3 });
+
+const mainTerm = document.querySelector('#wt-add .terminal');
+if (mainTerm) termObserver.observe(mainTerm);
+
+// ── TABS ──
+function switchTab(prefix, name) {
+  const allContents = document.querySelectorAll(`[id^="${prefix}-"]`);
+  allContents.forEach(el => el.classList.remove('active'));
+
+  const targetTab = document.getElementById(`${prefix}-${name}`);
+  if (targetTab) targetTab.classList.add('active');
+
+  // Update tab buttons
+  const tabGroups = { 'wt': document.getElementById('wtTabs') };
+  const allBtns = document.querySelectorAll('.tab-btn');
+  allBtns.forEach(btn => {
+    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${prefix}'`)) {
+      btn.classList.remove('active');
+      if (btn.getAttribute('onclick').includes(`'${name}'`)) {
+        btn.classList.add('active');
+      }
+    }
+  });
+}
+
+// ── WORKTREE DIAGRAM ──
+function buildWorktreeDiagram() {
+  const diagram = document.getElementById('wtDiagram');
+  if (!diagram) return;
+
+  const branches = [
+    { label: 'main', path: '~/project', color: 'var(--accent-green)', left: '10%' },
+    { label: 'feature/auth', path: '~/project-feature', color: 'var(--accent-blue)', left: '40%' },
+    { label: 'hotfix/bug', path: '~/project-hotfix', color: 'var(--accent-amber)', left: '70%' },
+  ];
+
+  branches.forEach((b, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `position:absolute; left:${b.left}; top:110px; display:flex; flex-direction:column; align-items:center; transform:translateX(-50%)`;
+
+    const line = document.createElement('div');
+    line.style.cssText = `width:1px; height:0; background:linear-gradient(to bottom, ${b.color}, transparent); opacity:0.5; margin-bottom:8px; transition:height 0.8s ${i*0.2}s ease`;
+    line.classList.add('wt-anim-line');
+
+    const node = document.createElement('div');
+    node.style.cssText = `background:var(--surface2); border:1px solid ${b.color}33; border-radius:8px; padding:10px 14px; font-size:11px; white-space:nowrap; text-align:center; color:${b.color}; opacity:0; transform:translateY(10px); transition:all 0.4s ${0.6 + i*0.2}s ease`;
+    node.innerHTML = `<span style="display:block;margin-bottom:4px">${b.label}</span><span style="font-size:10px;color:var(--text-muted)">${b.path}</span>`;
+    node.classList.add('wt-anim-node');
+
+    wrap.appendChild(line);
+    wrap.appendChild(node);
+    diagram.appendChild(wrap);
+  });
+
+  // Animate on scroll
+  const diagObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        document.querySelectorAll('.wt-anim-line').forEach(el => { el.style.height = '50px'; });
+        document.querySelectorAll('.wt-anim-node').forEach(el => {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+        diagObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  diagObserver.observe(diagram);
+}
+
+buildWorktreeDiagram();
+
+// ── GIT TOWN FLOW CANVAS ──
+function drawFlowCanvas() {
+  const canvas = document.getElementById('flowCanvas');
+  if (!canvas) return;
+  const container = canvas.parentElement;
+  const W = container.clientWidth - 48;
+  const H = 220;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const DPR = window.devicePixelRatio || 1;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(DPR, DPR);
+
+  const mainY = 45;
+  const featY = 110;
+  const hotfixY = 175;
+  const pad = 40;
+
+  // Colors
+  const green = '#ff6a00';
+  const blue = '#ff2d78';
+  const amber = '#ffe600';
+  const dim = '#2a2a2a';
+  const textDim = '#8a8070';
+
+  // Background
+  ctx.fillStyle = 'transparent';
+  ctx.fillRect(0, 0, W, H);
+
+  // Lane lines
+  [[mainY, green], [featY, blue], [hotfixY, amber]].forEach(([y, col]) => {
+    ctx.strokeStyle = dim;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 8]);
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Lane labels
+  ctx.fillStyle = textDim;
+  ctx.font = '10px Berkeley Mono, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('main', W - pad + 36, mainY + 4);
+  ctx.fillText('feature', W - pad + 36, featY + 4);
+  ctx.fillText('hotfix', W - pad + 36, hotfixY + 4);
+
+  // Commits & connections
+  const commits = [
+    { x: pad + 10, y: mainY, col: green, label: 'C0' },
+    { x: pad + 80, y: mainY, col: green, label: 'hack →' },
+    { x: pad + 140, y: featY, col: blue, label: 'hack' },
+    { x: pad + 200, y: featY, col: blue, label: 'wip' },
+    { x: pad + 260, y: featY, col: blue, label: 'sync ↑' },
+    { x: pad + 260, y: mainY, col: green, label: '← sync' },
+    { x: pad + 340, y: hotfixY, col: amber, label: 'hotfix' },
+    { x: pad + 400, y: hotfixY, col: amber, label: 'fix' },
+    { x: pad + 440, y: mainY, col: green, label: '← ship' },
+    { x: W - pad - 80, y: featY, col: blue, label: 'sync' },
+    { x: W - pad - 30, y: mainY, col: green, label: '← ship' },
+  ];
+
+  // Draw connections
+  const connections = [
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6],
+    [6, 7], [7, 8], [8, 9], [9, 10],
+  ];
+
+  connections.forEach(([a, b]) => {
+    const ca = commits[a], cb = commits[b];
+    const gradient = ctx.createLinearGradient(ca.x, ca.y, cb.x, cb.y);
+    gradient.addColorStop(0, ca.col + '88');
+    gradient.addColorStop(1, cb.col + '88');
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+
+    if (ca.y !== cb.y) {
+      ctx.beginPath();
+      ctx.moveTo(ca.x, ca.y);
+      ctx.bezierCurveTo(ca.x + 30, ca.y, cb.x - 30, cb.y, cb.x, cb.y);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(ca.x + 8, ca.y);
+      ctx.lineTo(cb.x - 8, cb.y);
+      ctx.stroke();
+    }
+  });
+
+  // Draw commit nodes
+  commits.forEach((c, i) => {
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = c.col;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fill();
+    ctx.strokeStyle = c.col;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Labels
+    ctx.fillStyle = textDim;
+    ctx.font = '9px Berkeley Mono, monospace';
+    ctx.textAlign = 'center';
+    const labelY = c.y > 100 ? c.y + 20 : c.y - 14;
+    ctx.fillText(c.label, c.x, labelY);
+  });
+}
+
+// Draw on load and resize
+window.addEventListener('load', drawFlowCanvas);
+window.addEventListener('resize', drawFlowCanvas);
+
+// Redraw when section scrolls into view
+const canvasObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) drawFlowCanvas();
+  });
+}, { threshold: 0.1 });
+
+const flowViz = document.getElementById('branchFlowViz');
+if (flowViz) canvasObserver.observe(flowViz);
+
+// ── HERO ENTRY ANIMATIONS ──
+document.addEventListener('DOMContentLoaded', () => {
+  const heroElements = document.querySelectorAll('.hero-eyebrow, .hero-title, .hero-subtitle, .hero-nav');
+  heroElements.forEach((el, i) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'opacity 0.7s ease, transform 0.7s ease';
+    setTimeout(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    }, 200 + i * 120);
+  });
+});
+</script>
+</body>
+</html>
