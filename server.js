@@ -121,7 +121,7 @@ const STEPS = {
   },
   'wt-commit-hotfix': async (res) => {
     const hotfixDir = path.join(WORKTREES_DIR, 'project-hotfix');
-    fs.writeFileSync(path.join(hotfixDir, 'hotfix.js'), '// Critical bug fix\nexport function fixLogin() { return true; }\n');
+    fs.writeFileSync(path.join(hotfixDir, 'hotfix.js'), `// Critical bug fix — patched at ${Date.now()}\nexport function fixLogin() { return true; }\n`);
     const g = (args) => run('git', args, hotfixDir, { GIT_AUTHOR_NAME: 'Git Demo', GIT_COMMITTER_NAME: 'Git Demo', GIT_AUTHOR_EMAIL: 'demo@gitdemo.dev', GIT_COMMITTER_EMAIL: 'demo@gitdemo.dev' });
     await g(['add', '.']);
     stream('git', ['commit', '-m', 'fix: resolve login crash on null session'], hotfixDir, res, {
@@ -134,7 +134,19 @@ const STEPS = {
     stream('git', ['status'], path.join(WORKTREES_DIR, 'project-feature'), res);
   },
   'wt-remove-hotfix': async (res) => {
-    stream('git', ['worktree', 'remove', path.join(WORKTREES_DIR, 'project-hotfix')], SANDBOX_DIR, res);
+    cors(res);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+    const send = (type, data) => res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+    const result = await run('git', ['worktree', 'remove', path.join(WORKTREES_DIR, 'project-hotfix')], SANDBOX_DIR);
+    if (result.code === 0) {
+      send('stdout', `Removed worktree: ${path.join(WORKTREES_DIR, 'project-hotfix')}\n✓ Hotfix directory deleted. Branch hotfix/critical-bug still exists in the repo.\n`);
+    } else {
+      send('stderr', result.stderr || 'Failed to remove worktree\n');
+    }
+    send('exit', result.code);
+    res.end();
   },
   'wt-list-final': async (res) => {
     stream('git', ['worktree', 'list'], SANDBOX_DIR, res);
